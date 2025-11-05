@@ -8,7 +8,6 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Simple test for health check bruh
 app.get("/health", (req, res) => {
     res.json({ status: "ok" })
 });
