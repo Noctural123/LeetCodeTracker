@@ -8,10 +8,9 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-app.get("/health", (req, res) => {
+app.get("/test", (req, res) => {
     res.json({ status: "ok" })
 });
-
 
 const PORT = Number(process.env.PORT) || 3000;
 app.listen(PORT, () => {
