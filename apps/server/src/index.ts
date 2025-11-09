@@ -60,6 +60,23 @@ app.post("/attempt", async (req, res) => {
     },
 });
 
+  const attempt = await prisma.attempt.create({
+    data: {
+      // from the user and problem data, we can create a new attempt
+      userId: user.id, // ".id" comes from the prisma schema we defined
+      problemId: problem.id,
+
+      status: p.status,
+      lang: p.lang ?? null,
+      runtimeMs: p.runtime_ms ?? null,
+      memoryKb: p.memory_kb ?? null,
+      seconds: p.seconds ?? null,
+      code: p.code ?? null,
+      ts: p.ts ?? new Date(),
+    },
+    include: { user: true, problem: true }, // fetch the user and problem data, e.g., handle, title, id, slug, title, etc.
+  });
+
 const PORT = Number(process.env.PORT) || 3000;
 app.listen(PORT, () => {
   console.log(`Server running at http://localhost:${PORT}`);
