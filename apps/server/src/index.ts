@@ -77,6 +77,22 @@ app.post("/attempt", async (req, res) => {
     include: { user: true, problem: true }, // fetch the user and problem data, e.g., handle, title, id, slug, title, etc.
   });
 
+  res.json({
+    id: attempt.id,
+    user_handle: attempt.user.handle,
+    slug: attempt.problem.slug,
+    title: attempt.problem.title,
+    topics: attempt.problem.topics,
+    lc_difficulty: attempt.problem.lcDifficulty,
+    status: attempt.status,
+    lang: attempt.lang,
+    runtime_ms: attempt.runtimeMs,
+    memory_kb: attempt.memoryKb,
+    seconds: attempt.seconds,
+    ts: attempt.ts,
+  });
+});
+
 const PORT = Number(process.env.PORT) || 3000;
 app.listen(PORT, () => {
   console.log(`Server running at http://localhost:${PORT}`);
