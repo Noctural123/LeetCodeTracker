@@ -77,7 +77,7 @@ app.post("/attempt", async (req, res) => {
     include: { user: true, problem: true }, // fetch the user and problem data, e.g., handle, title, id, slug, title, etc.
   });
 
-  res.json({
+  res.json({ // return the attempt data
     id: attempt.id,
     user_handle: attempt.user.handle,
     slug: attempt.problem.slug,
