@@ -110,10 +110,37 @@ app.get("/attempts", async (req, res) => {
     orderBy: { ts: "desc" },
     take: 50,
   });
+  res.json(
+    rows.map((a) => ({
+      id: a.id,
+      user_handle: a.user.handle,
+      slug: a.problem.slug,
+      title: a.problem.title,
+      topics: a.problem.topics,
+      lc_difficulty: a.problem.lcDifficulty,
+      status: a.status,
+      lang: a.lang,
+      runtime_ms: a.runtimeMs,
+      memory_kb: a.memoryKb,
+      seconds: a.seconds,
+      ts: a.ts,
+    }))
+  );
+});
 
-const PORT = Number(process.env.PORT) || 3000; // default port is 3000
-app.listen(PORT, () => {
-  console.log(`Server running at http://localhost:${PORT}`);
+const PORT = process.env.PORT || 4000;
+const server = app.listen(PORT, () => {
+  console.log(`API on http://localhost:${PORT}`);
+});
+
+// Graceful shutdown
+process.on("SIGINT", async () => {
+  await prisma.$disconnect();
+  server.close(() => process.exit(0));
+});
+process.on("SIGTERM", async () => {
+  await prisma.$disconnect();
+  server.close(() => process.exit(0));
 });
 
 // npm run dev - Runs Typescript directly
