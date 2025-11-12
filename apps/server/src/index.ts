@@ -93,7 +93,25 @@ app.post("/attempt", async (req, res) => {
   });
 });
 
-const PORT = Number(process.env.PORT) || 3000;
+app.get("/attempts", async (req, res) => {
+  const user_handle = String(req.query.user_handle || "");
+  if (!user_handle) return res.status(400).json({ error: "user_handle required" });
+
+  const topic = req.query.topic ? String(req.query.topic) : null;
+  const status = req.query.status ? String(req.query.status) : null;
+
+  const rows = await prisma.attempt.findMany({
+    where: {
+      user: { handle: user_handle },
+      ...(status ? { status } : {}),
+      ...(topic ? { problem: { topics: { contains: topic } } } : {}),
+    },
+    include: { user: true, problem: true },
+    orderBy: { ts: "desc" },
+    take: 50,
+  });
+
+const PORT = Number(process.env.PORT) || 3000; // default port is 3000
 app.listen(PORT, () => {
   console.log(`Server running at http://localhost:${PORT}`);
 });
