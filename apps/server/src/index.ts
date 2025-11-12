@@ -147,6 +147,3 @@ process.on("SIGTERM", async () => {
 // npm run build - Compiles Typescript to JavaScript
 // npm run start - Runs the JavaScript file
 // npm run prisma:studio - starts the prisma studio, opens up a web interface to view the database
-
-
-
