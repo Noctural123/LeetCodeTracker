@@ -1,79 +1,136 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
+import { useSession, signOut } from "next-auth/react";
 import axios from "axios";
 import { z } from "zod";
 
 type AttemptRow = {
     id: number;
+    user_handle: string;
+    slug: string;
     title: string;
     topics: string;
+    lc_difficulty: number;
     status: string;
+    lang: string | null;
+    runtime_ms: number | null;
+    memory_kb: number | null;
+    seconds: number | null;
     ts: string;
 }
 
-// Zod schema for runtime validation
+// Zod schema for runtime validation (allows extra fields from API)
 const AttemptRowSchema = z.object({
     id: z.number(),
+    user_handle: z.string(),
+    slug: z.string(),
     title: z.string(),
     topics: z.string(),
+    lc_difficulty: z.number(),
     status: z.string(),
+    lang: z.string().nullable(),
+    runtime_ms: z.number().nullable(),
+    memory_kb: z.number().nullable(),
+    seconds: z.number().nullable(),
     ts: z.string(),
-});
+}).passthrough(); // Allow extra fields
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 
 export default function Home() {
-    // Runs once on mount, gets initial user from URL or localStorage otherwise empty string
-    const initialUser = useMemo(() => {
-        if(typeof window === "undefined") return "";
-        const fromUrl = new URLSearchParams(window.location.search).get("user") || "";
-        const fromStorage = localStorage.getItem("user") || "";
-        return fromUrl || fromStorage || "";
-    }, []);
-
-    const [user, setUser] = useState<string>(initialUser);
+    const router = useRouter();
+    const { data: session, status } = useSession();
     const [rows, setRows] = useState<AttemptRow[]>([]);
     const [loading, setLoading] = useState<boolean>(false);
     const [error, setError] = useState<string | null>(null);
 
+    // Redirect to login if not authenticated
     useEffect(() => {
-        if (typeof window !== "undefined") {
-            localStorage.setItem("user_handle", user);
+        if (status === "unauthenticated") {
+            router.push("/login");
         }
-    }, [user]);
+    }, [status, router]);
 
-    async function load() {
-        if (!user.trim()){
+    // Show loading state while checking authentication
+    if (status === "loading") {
+        return (
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+                <div className="text-center">
+                    <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                    <p className="mt-4 text-gray-600">Loading...</p>
+                </div>
+            </div>
+        );
+    }
+
+    // Redirect if not authenticated (fallback)
+    if (status === "unauthenticated") {
+        return null; // Will redirect via useEffect
+    }
+
+    const userHandle = session?.user?.handle || session?.user?.email?.split("@")[0] || "";
+
+    const handleLogout = async () => {
+        await signOut({ callbackUrl: "/login" });
+    };
+
+    const load = useCallback(async () => {
+        if (!userHandle.trim()){
             setError("User handle is required");
             return;
         }
         try{
             setLoading(true);
             setError(null);
-            const res = await axios.get(`${API}/attempts`, { params: { user_handle: user.trim()}});
+            console.log("Fetching attempts for:", userHandle);
+            console.log("API URL:", `${API}/attempts`);
+            
+            const res = await axios.get(`${API}/attempts`, { 
+                params: { user_handle: userHandle.trim() }
+            });
+            
+            console.log("Response:", res.data);
+            
+            // Handle empty array case
+            if (!Array.isArray(res.data)) {
+                setError("Invalid response format from server");
+                return;
+            }
             
             // Validate response data with Zod
             const validatedData = AttemptRowSchema.array().parse(res.data);
             setRows(validatedData);
         } catch (e: any) {
+            console.error("Error loading attempts:", e);
             // Handle Zod validation errors
             if (e instanceof z.ZodError) {
                 setError(`Invalid data format: ${e.issues.map((err: z.ZodIssue) => err.message).join(", ")}`);
+            } else if (e.code === 'ECONNREFUSED' || e.message?.includes('Network Error')) {
+                setError("Cannot connect to server. Make sure the backend is running on http://localhost:4000");
             } else {
                 // Handle axios/network errors
-                setError(e.response?.data?.error ? JSON.stringify(e.response.data.error) : e.message);
+                const errorMessage = e.response?.data?.error 
+                    ? (typeof e.response.data.error === 'string' 
+                        ? e.response.data.error 
+                        : JSON.stringify(e.response.data.error))
+                    : e.message || "Failed to fetch attempts. Check console for details.";
+                setError(errorMessage);
             }
         }
         finally {
             setLoading(false);
         }
-    }
+    }, [userHandle]);
 
     useEffect(() => {
-        if (user.trim()) {
+        if (status === "authenticated" && userHandle.trim()) {
             load();
+        } else {
+            setRows([]);
+            setError(null);
         }
-    }, [user]);
+    }, [status, userHandle, load]);
 
     const formatDate = (dateString: string) => {
         const date = new Date(dateString);
@@ -90,42 +147,19 @@ export default function Home() {
         <div className="min-h-screen bg-gray-50 py-8">
             <div className="container mx-auto px-4 max-w-7xl">
                 {/* Header */}
-                <div className="mb-8">
-                    <h1 className="text-4xl font-bold text-gray-900 mb-2">LeetCode Tracker</h1>
-                    <p className="text-gray-600">Track your coding problem attempts</p>
-                </div>
-
-                {/* Search Section */}
-                <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-                    <div className="flex gap-4">
-                        <div className="flex-1">
-                            <label htmlFor="user-handle" className="block text-sm font-medium text-gray-700 mb-2">
-                                User Handle
-                            </label>
-                            <input
-                                id="user-handle"
-                                type="text"
-                                value={user}
-                                onChange={(e) => setUser(e.target.value)}
-                                onKeyDown={(e) => {
-                                    if (e.key === "Enter") {
-                                        load();
-                                    }
-                                }}
-                                placeholder="Enter LeetCode username"
-                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                            />
-                        </div>
-                        <div className="flex items-end">
-                            <button
-                                onClick={load}
-                                disabled={loading || !user.trim()}
-                                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-medium transition-colors"
-                            >
-                                {loading ? "Loading..." : "Search"}
-                            </button>
-                        </div>
+                <div className="mb-8 flex justify-between items-center">
+                    <div>
+                        <h1 className="text-4xl font-bold text-gray-900 mb-2">My Dashboard</h1>
+                        <p className="text-gray-600">
+                            Welcome, <span className="font-semibold">{session?.user?.name || userHandle}</span>
+                        </p>
                     </div>
+                    <button
+                        onClick={handleLogout}
+                        className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium transition-colors"
+                    >
+                        Logout
+                    </button>
                 </div>
 
                 {/* Error Display */}
@@ -211,17 +245,10 @@ export default function Home() {
                 )}
 
                 {/* Empty State */}
-                {!loading && !error && user.trim() && rows.length === 0 && (
+                {!loading && !error && rows.length === 0 && (
                     <div className="bg-white rounded-lg shadow-md p-12 text-center">
-                        <p className="text-gray-500 text-lg">No attempts found for user "{user}"</p>
-                        <p className="text-gray-400 text-sm mt-2">Try a different username or create some attempts first.</p>
-                    </div>
-                )}
-
-                {/* Initial State */}
-                {!loading && !error && !user.trim() && (
-                    <div className="bg-white rounded-lg shadow-md p-12 text-center">
-                        <p className="text-gray-500 text-lg">Enter a user handle to view attempts</p>
+                        <p className="text-gray-500 text-lg">No attempts found</p>
+                        <p className="text-gray-400 text-sm mt-2">Start solving problems to see your attempts here!</p>
                     </div>
                 )}
             </div>

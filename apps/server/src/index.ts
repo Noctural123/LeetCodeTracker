@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import { z } from "zod";
 import { PrismaClient } from "@prisma/client";
+import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 const app = express();
@@ -13,6 +14,113 @@ app.use(express.json());
 
 app.get("/test", (req, res) => {
     res.json({ status: "ok" })
+});
+
+// Registration endpoint
+const RegisterSchema = z.object({
+  username: z.string().min(1, "Username is required"),
+  email: z.string().email("Invalid email address"),
+  password: z.string().min(6, "Password must be at least 6 characters"),
+});
+
+app.post("/auth/register", async (req, res) => {
+  const parsed = RegisterSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.issues[0].message });
+  }
+
+  const { username, email, password } = parsed.data;
+
+  try {
+    // Check if user already exists
+    const existingUser = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { handle: username },
+          { email: email },
+        ],
+      },
+    });
+
+    if (existingUser) {
+      return res.status(400).json({ 
+        error: existingUser.handle === username 
+          ? "Username already taken" 
+          : "Email already registered" 
+      });
+    }
+
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Create user
+    const user = await prisma.user.create({
+      data: {
+        handle: username,
+        email: email,
+        password: hashedPassword,
+      },
+    });
+
+    res.json({ 
+      message: "User created successfully",
+      user: {
+        id: user.id,
+        username: user.handle,
+        email: user.email,
+      },
+    });
+  } catch (error: any) {
+    console.error("Registration error:", error);
+    res.status(500).json({ error: "Registration failed" });
+  }
+});
+
+// Login endpoint (for NextAuth credentials provider)
+const LoginSchema = z.object({
+  username: z.string().min(1, "Username is required"),
+  password: z.string().min(1, "Password is required"),
+});
+
+app.post("/auth/login", async (req, res) => {
+  const parsed = LoginSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.issues[0].message });
+  }
+
+  const { username, password } = parsed.data;
+
+  try {
+    // Find user by username (handle) or email
+    const user = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { handle: username },
+          { email: username },
+        ],
+      },
+    });
+
+    if (!user || !user.password) {
+      return res.status(401).json({ error: "Invalid username or password" });
+    }
+
+    // Verify password
+    const isValidPassword = await bcrypt.compare(password, user.password);
+    if (!isValidPassword) {
+      return res.status(401).json({ error: "Invalid username or password" });
+    }
+
+    res.json({
+      id: user.id,
+      username: user.handle,
+      email: user.email,
+      name: user.name,
+    });
+  } catch (error: any) {
+    console.error("Login error:", error);
+    res.status(500).json({ error: "Login failed" });
+  }
 });
 
 // Data validation for creating an attempt
