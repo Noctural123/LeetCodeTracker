@@ -92,7 +92,7 @@ export default function Home() {
             
             console.log("Response:", res.data);
             
-            // Handle empty array case
+            
             if (!Array.isArray(res.data)) {
                 setError("Invalid response format from server");
                 return;
