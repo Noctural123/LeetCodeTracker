@@ -16,6 +16,8 @@ model User {
   emailVerified DateTime?
   image         String?
   password      String?   // Hashed password for credentials login
+  resetToken        String?
+  resetTokenExpires DateTime?
   accounts      Account[]
   sessions      Session[]
   attempts      Attempt[]

@@ -3,6 +3,7 @@ import cors from "cors";
 import { z } from "zod";
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import crypto from "crypto";
 
 // Initialize Prisma Client with logging
 const prisma = new PrismaClient({
@@ -144,6 +145,142 @@ app.post("/auth/login", async (req, res) => {
     res.status(500).json({ error: "Login failed" });
   }
 });
+
+// Forgot Password Endpoint
+const ForgotPasswordSchema = z.object({
+  email: z.string().email("Invalid email address"),
+});
+
+app.post("/auth/forgot-password", async (req, res) => {
+  const parsed = ForgotPasswordSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.issues[0].message });
+  }
+
+  const { email } = parsed.data;
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { email },
+    });
+
+    if (!user) {
+      // Don't reveal if user exists or not for security
+      return res.json({ message: "If that email is registered, a reset link has been sent." });
+    }
+
+    // Generate token
+    const resetToken = crypto.randomBytes(32).toString("hex");
+    const resetTokenExpires = new Date(Date.now() + 3600000); // 1 hour from now
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        resetToken,
+        resetTokenExpires,
+      },
+    });
+
+    // In a real app, send email here using a service like SendGrid/AWS SES
+    // For now, log the token to console
+    const resetLink = `http://localhost:3000/reset-password?token=${resetToken}`;
+    console.log(`
+      ==================================================
+      PASSWORD RESET REQUEST
+      User: ${user.handle} (${user.email})
+      Reset Link: ${resetLink}
+      ==================================================
+    `);
+
+    res.json({ message: "If that email is registered, a reset link has been sent." });
+  } catch (error: any) {
+    console.error("Forgot password error:", error);
+    res.status(500).json({ error: "Failed to process request" });
+  }
+});
+
+// Forgot Username Endpoint
+app.post("/auth/forgot-username", async (req, res) => {
+  const parsed = ForgotPasswordSchema.safeParse(req.body); // Re-use schema since it just checks email
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.issues[0].message });
+  }
+
+  const { email } = parsed.data;
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { email },
+    });
+
+    if (!user) {
+       // Security: don't reveal existence
+      return res.json({ message: "If that email is registered, your username has been sent." });
+    }
+
+    // In a real app, send email here
+    console.log(`
+      ==================================================
+      USERNAME RETRIEVAL REQUEST
+      Email: ${email}
+      Username: ${user.handle}
+      ==================================================
+    `);
+
+    res.json({ message: "If that email is registered, your username has been sent." });
+  } catch (error: any) {
+    console.error("Forgot username error:", error);
+    res.status(500).json({ error: "Failed to process request" });
+  }
+});
+
+// Reset Password Endpoint
+const ResetPasswordSchema = z.object({
+  token: z.string().min(1, "Token is required"),
+  password: z.string().min(6, "Password must be at least 6 characters"),
+});
+
+app.post("/auth/reset-password", async (req, res) => {
+  const parsed = ResetPasswordSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.issues[0].message });
+  }
+
+  const { token, password } = parsed.data;
+
+  try {
+    const user = await prisma.user.findFirst({
+      where: {
+        resetToken: token,
+        resetTokenExpires: {
+          gt: new Date(), // Token must not be expired
+        },
+      },
+    });
+
+    if (!user) {
+      return res.status(400).json({ error: "Invalid or expired reset token" });
+    }
+
+    // Hash new password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        password: hashedPassword,
+        resetToken: null,
+        resetTokenExpires: null,
+      },
+    });
+
+    res.json({ message: "Password reset successfully" });
+  } catch (error: any) {
+    console.error("Reset password error:", error);
+    res.status(500).json({ error: "Failed to reset password" });
+  }
+});
+
 
 // Data validation for creating an attempt
 const AttemptCreate = z.object({
