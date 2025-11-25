@@ -4,13 +4,20 @@ import { z } from "zod";
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 
-const prisma = new PrismaClient();
+// Initialize Prisma Client with logging
+const prisma = new PrismaClient({
+  log: ['query', 'info', 'warn', 'error'],
+});
+
 const app = express();
 app.use(cors({
   origin: "http://localhost:3000",
   credentials: true,
 }));
-app.use(express.json());
+app.use(express.json()); // Ensure JSON body parsing is enabled
+
+// Health check and startup log
+console.log("Starting server...");
 
 app.get("/test", (req, res) => {
     res.json({ status: "ok" })
@@ -24,8 +31,11 @@ const RegisterSchema = z.object({
 });
 
 app.post("/auth/register", async (req, res) => {
+  console.log("Received registration request:", req.body);
+  
   const parsed = RegisterSchema.safeParse(req.body);
   if (!parsed.success) {
+    console.log("Validation failed:", parsed.error.issues);
     return res.status(400).json({ error: parsed.error.issues[0].message });
   }
 
@@ -33,6 +43,7 @@ app.post("/auth/register", async (req, res) => {
 
   try {
     // Check if user already exists
+    console.log("Checking for existing user...");
     const existingUser = await prisma.user.findFirst({
       where: {
         OR: [
@@ -43,6 +54,7 @@ app.post("/auth/register", async (req, res) => {
     });
 
     if (existingUser) {
+      console.log("User already exists:", existingUser.handle === username ? "handle" : "email");
       return res.status(400).json({ 
         error: existingUser.handle === username 
           ? "Username already taken" 
@@ -51,9 +63,11 @@ app.post("/auth/register", async (req, res) => {
     }
 
     // Hash password
+    console.log("Hashing password...");
     const hashedPassword = await bcrypt.hash(password, 10);
 
     // Create user
+    console.log("Creating user in database...");
     const user = await prisma.user.create({
       data: {
         handle: username,
@@ -61,6 +75,8 @@ app.post("/auth/register", async (req, res) => {
         password: hashedPassword,
       },
     });
+    
+    console.log("User created successfully:", user.id);
 
     res.json({ 
       message: "User created successfully",
@@ -71,8 +87,14 @@ app.post("/auth/register", async (req, res) => {
       },
     });
   } catch (error: any) {
-    console.error("Registration error:", error);
-    res.status(500).json({ error: "Registration failed" });
+    // Log the full error structure
+    console.error("Registration error full object:", error);
+    console.error("Registration error stringified:", JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
+    
+    res.status(500).json({ 
+        error: `Registration failed: ${error.message || "Unknown error"}`,
+        details: process.env.NODE_ENV === 'development' ? error : undefined
+    });
   }
 });
 
@@ -183,7 +205,7 @@ app.post("/attempt", async (req, res) => {
       ts: p.ts ?? new Date(),
     },
     include: { user: true, problem: true }, // fetch the user and problem data, e.g., handle, title, id, slug, title, etc.
-  });
+});
 
   res.json({ // return the attempt data
     id: attempt.id,
@@ -203,23 +225,28 @@ app.post("/attempt", async (req, res) => {
 
 app.get("/attempts", async (req, res) => {
   const user_handle = String(req.query.user_handle || "");
-  if (!user_handle) return res.status(400).json({ error: "user_handle required" });
+  
+  if (!user_handle) {
+      return res.json([]);
+  }
 
-  const topic = req.query.topic ? String(req.query.topic) : null;
-  const status = req.query.status ? String(req.query.status) : null;
-
-  const rows = await prisma.attempt.findMany({
+  const attempts = await prisma.attempt.findMany({
     where: {
-      user: { handle: user_handle },
-      ...(status ? { status } : {}),
-      ...(topic ? { problem: { topics: { contains: topic } } } : {}),
+      user: {
+        handle: user_handle,
+      },
     },
-    include: { user: true, problem: true },
-    orderBy: { ts: "desc" },
-    take: 50,
+    include: {
+      problem: true,
+      user: true,
+    },
+    orderBy: {
+      ts: "desc",
+    },
   });
+
   res.json(
-    rows.map((a) => ({
+    attempts.map((a) => ({
       id: a.id,
       user_handle: a.user.handle,
       slug: a.problem.slug,
@@ -250,8 +277,3 @@ process.on("SIGTERM", async () => {
   await prisma.$disconnect();
   server.close(() => process.exit(0));
 });
-
-// npm run dev - Runs Typescript directly
-// npm run build - Compiles Typescript to JavaScript
-// npm run start - Runs the JavaScript file
-// npm run prisma:studio - starts the prisma studio, opens up a web interface to view the database

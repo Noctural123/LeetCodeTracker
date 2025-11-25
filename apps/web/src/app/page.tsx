@@ -52,6 +52,63 @@ export default function Home() {
         }
     }, [status, router]);
 
+    const userHandle = session?.user?.handle || session?.user?.email?.split("@")[0] || "";
+
+    useEffect(() => {
+        const fetchAttempts = async () => {
+            try{
+                setLoading(true);
+                setError(null);
+                console.log("Fetching attempts for:", userHandle);
+                console.log("API URL:", `${API}/attempts`);
+                
+                const res = await axios.get(`${API}/attempts`, { 
+                    params: { user_handle: userHandle.trim() }
+                });
+                
+                console.log("Response:", res.data);
+                
+                if (!Array.isArray(res.data)) {
+                    setError("Invalid response format from server");
+                    return;
+                }
+                
+                // Validate response data with Zod
+                const validatedData = AttemptRowSchema.array().parse(res.data);
+                setRows(validatedData);
+            } catch (e: any) {
+                console.error("Error loading attempts:", e);
+                // Handle Zod validation errors
+                if (e instanceof z.ZodError) {
+                    setError(`Invalid data format: ${e.issues.map((err: z.ZodIssue) => err.message).join(", ")}`);
+                } else if (e.code === 'ECONNREFUSED' || e.message?.includes('Network Error')) {
+                    setError("Cannot connect to server. Make sure the backend is running on http://localhost:4000");
+                } else {
+                    // Handle axios/network errors
+                    const errorMessage = e.response?.data?.error 
+                        ? (typeof e.response.data.error === 'string' 
+                            ? e.response.data.error 
+                            : JSON.stringify(e.response.data.error))
+                        : e.message || "Failed to fetch attempts. Check console for details.";
+                    setError(errorMessage);
+                }
+            }
+            finally {
+                setLoading(false);
+            }
+        };
+
+        if (status === "loading") return; // Wait for loading to finish
+        
+        if (status === "unauthenticated" || !userHandle.trim()) {
+            setRows([]);
+            setError(null);
+            return;
+        }
+
+        fetchAttempts();
+    }, [status, userHandle]);
+
     // Show loading state while checking authentication
     if (status === "loading") {
         return (
@@ -69,68 +126,9 @@ export default function Home() {
         return null; // Will redirect via useEffect
     }
 
-    const userHandle = session?.user?.handle || session?.user?.email?.split("@")[0] || "";
-
     const handleLogout = async () => {
         await signOut({ callbackUrl: "/login" });
     };
-
-    const load = useCallback(async () => {
-        if (!userHandle.trim()){
-            setError("User handle is required");
-            return;
-        }
-        try{
-            setLoading(true);
-            setError(null);
-            console.log("Fetching attempts for:", userHandle);
-            console.log("API URL:", `${API}/attempts`);
-            
-            const res = await axios.get(`${API}/attempts`, { 
-                params: { user_handle: userHandle.trim() }
-            });
-            
-            console.log("Response:", res.data);
-            
-            
-            if (!Array.isArray(res.data)) {
-                setError("Invalid response format from server");
-                return;
-            }
-            
-            // Validate response data with Zod
-            const validatedData = AttemptRowSchema.array().parse(res.data);
-            setRows(validatedData);
-        } catch (e: any) {
-            console.error("Error loading attempts:", e);
-            // Handle Zod validation errors
-            if (e instanceof z.ZodError) {
-                setError(`Invalid data format: ${e.issues.map((err: z.ZodIssue) => err.message).join(", ")}`);
-            } else if (e.code === 'ECONNREFUSED' || e.message?.includes('Network Error')) {
-                setError("Cannot connect to server. Make sure the backend is running on http://localhost:4000");
-            } else {
-                // Handle axios/network errors
-                const errorMessage = e.response?.data?.error 
-                    ? (typeof e.response.data.error === 'string' 
-                        ? e.response.data.error 
-                        : JSON.stringify(e.response.data.error))
-                    : e.message || "Failed to fetch attempts. Check console for details.";
-                setError(errorMessage);
-            }
-        }
-        finally {
-            setLoading(false);
-        }
-    }, [userHandle]);
-
-    useEffect(() => {
-        if (status === "authenticated" && userHandle.trim()) {
-            load();
-        } else {
-            setRows([]);
-            setError(null);
-        }
-    }, [status, userHandle, load]);
 
     const formatDate = (dateString: string) => {
         const date = new Date(dateString);

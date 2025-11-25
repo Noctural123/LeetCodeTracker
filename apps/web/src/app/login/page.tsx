@@ -138,6 +138,14 @@ export default function LoginPage() {
                                 placeholder="Enter your password"
                             />
                         </div>
+                        
+                        <div className="flex items-center justify-end">
+                            <div className="text-sm">
+                                <Link href="#" className="font-medium text-blue-600 hover:text-blue-500">
+                                    Forgot password / username?
+                                </Link>
+                            </div>
+                        </div>
                     </div>
 
                     {error && (
@@ -224,4 +232,3 @@ export default function LoginPage() {
         </div>
     );
 }
-

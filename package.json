@@ -2,7 +2,7 @@
     "name": "leetcode-tracker",
     "private": true,
     "workspaces": [
-        "app/*"
+        "apps/*"
     ],
     "dependencies": {
         "@prisma/client": "^6.18.0",
