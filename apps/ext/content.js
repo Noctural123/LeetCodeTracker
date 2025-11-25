@@ -24,26 +24,63 @@ window.addEventListener('message', (event) => {
         }
 
         // 2. Difficulty & Topics
-        // This is tricky as classes are obfuscated. 
-        // We'll try to find the difficulty tag by text content in specific containers if possible.
-        // Fallback: Search entire body text for first occurrence of Easy/Medium/Hard which is usually the difficulty label.
         let difficulty = 1; // Default Easy
-        
-        // LeetCode usually puts difficulty right after title. 
-        // We can try to grab the text content of the problem description header
-        const descriptionElement = document.querySelector('[data-track-load="description_content"]');
-        // If we can't find specific elements, we fallback to simple text search in the top part of the page
-        const headerText = document.body.innerText.substring(0, 2000); 
-        
-        if (headerText.includes("Hard")) difficulty = 3;
-        else if (headerText.includes("Medium")) difficulty = 2;
-        else difficulty = 1;
+        let topics = [];
+
+        // Try to scrape from __NEXT_DATA__ (most reliable for Single Page Apps)
+        try {
+            const nextDataScript = document.getElementById('__NEXT_DATA__');
+            if (nextDataScript) {
+                const data = JSON.parse(nextDataScript.textContent);
+                // Traverse the JSON to find question data
+                // Structure varies, but usually under queries -> 0 -> state -> data -> question
+                // We'll try to find an object that looks like a question
+                const queries = data?.props?.pageProps?.dehydratedState?.queries || [];
+                const questionQuery = queries.find(q => q?.state?.data?.question?.topicTags);
+                
+                if (questionQuery) {
+                    const question = questionQuery.state.data.question;
+                    
+                    // Get difficulty
+                    if (question.difficulty === "Medium") difficulty = 2;
+                    else if (question.difficulty === "Hard") difficulty = 3;
+                    
+                    // Get topics
+                    if (Array.isArray(question.topicTags)) {
+                        topics = question.topicTags.map(t => t.name);
+                    }
+                }
+            }
+        } catch (e) {
+            console.error("LCT: Failed to parse __NEXT_DATA__", e);
+        }
+
+        // Fallback: Scrape from DOM if __NEXT_DATA__ failed
+        if (topics.length === 0) {
+            // Try to find topic pills (often have href="/tag/...")
+            const topicLinks = document.querySelectorAll('a[href*="/tag/"]');
+            topicLinks.forEach(link => {
+                if (link.textContent) topics.push(link.textContent.trim());
+            });
+            
+            // Deduplicate
+            topics = [...new Set(topics)];
+        }
+
+        // Fallback Difficulty
+        if (difficulty === 1) { // If still default
+            const headerText = document.body.innerText.substring(0, 2000); 
+            if (headerText.includes("Hard")) difficulty = 3;
+            else if (headerText.includes("Medium")) difficulty = 2;
+        }
+
+        const topicsStr = topics.length > 0 ? topics.slice(0, 5).join("; ") : "Algorithms";
 
         const attemptData = {
             user_handle: user_handle,
             slug: payload.slug,
             title: title,
-            topics: "Algorithms", // Placeholder as topics are hard to scrape
+            topics: topicsStr,
             lc_difficulty: difficulty,
             status: payload.status,
             lang: payload.lang,

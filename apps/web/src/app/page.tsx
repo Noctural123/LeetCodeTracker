@@ -54,6 +54,14 @@ export default function Home() {
 
     const userHandle = session?.user?.handle || session?.user?.email?.split("@")[0] || "";
 
+    // Debug log for session data
+    useEffect(() => {
+        if (session) {
+            console.log("Session user:", session.user);
+            console.log("Derived handle:", userHandle);
+        }
+    }, [session, userHandle]);
+
     useEffect(() => {
         const fetchAttempts = async () => {
             try{
@@ -100,13 +108,16 @@ export default function Home() {
 
         if (status === "loading") return; // Wait for loading to finish
         
-        if (status === "unauthenticated" || !userHandle.trim()) {
+        // Allow fetching if handle is missing, backend will return empty
+        if (status === "unauthenticated") {
             setRows([]);
             setError(null);
             return;
         }
 
-        fetchAttempts();
+        if (userHandle) {
+            fetchAttempts();
+        }
     }, [status, userHandle]);
 
     // Show loading state while checking authentication
@@ -150,6 +161,9 @@ export default function Home() {
                         <h1 className="text-4xl font-bold text-gray-900 mb-2">My Dashboard</h1>
                         <p className="text-gray-600">
                             Welcome, <span className="font-semibold">{session?.user?.name || userHandle}</span>
+                        </p>
+                        <p className="text-sm text-gray-500 mt-1">
+                            Username: <span className="font-semibold text-gray-700">{userHandle}</span>
                         </p>
                     </div>
                     <button

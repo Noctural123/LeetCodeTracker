@@ -17,7 +17,10 @@
   
     XHR.send = function(postData) {
       this.addEventListener('load', function() {
-        handleResponse(this._url, this._method, this.responseText, postData);
+        // Only try to read responseText if it's text/json
+        if (!this.responseType || this.responseType === 'text' || this.responseType === '') {
+            handleResponse(this._url, this._method, this.responseText, postData);
+        }
       });
       return send.apply(this, arguments);
     };
