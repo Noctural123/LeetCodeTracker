@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body { width: 300px; padding: 15px; font-family: sans-serif; }
+    input { width: 100%; padding: 8px; margin: 10px 0; box-sizing: border-box; }
+    button { width: 100%; padding: 10px; background: #007bff; color: white; border: none; cursor: pointer; }
+    button:hover { background: #0056b3; }
+    .status { margin-top: 10px; font-size: 12px; color: green; display: none; }
+  </style>
+</head>
+<body>
+  <h3>LeetCode Tracker</h3>
+  <label for="handle">Your LCT Username:</label>
+  <input type="text" id="handle" placeholder="Enter your handle/username">
+  <button id="save">Save Configuration</button>
+  <div id="status" class="status">Saved!</div>
+  <script src="popup.js"></script>
+</body>
+</html>

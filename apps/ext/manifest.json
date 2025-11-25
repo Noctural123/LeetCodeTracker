@@ -1,0 +1,36 @@
+{
+  "manifest_version": 3,
+  "name": "LeetCode Tracker",
+  "version": "1.0",
+  "description": "Track your LeetCode progress locally",
+  "permissions": [
+    "storage",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://leetcode.com/*",
+    "http://localhost:4000/*"
+  ],
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://leetcode.com/problems/*"],
+      "js": ["inject.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["https://leetcode.com/problems/*"],
+      "js": ["content.js"],
+      "run_at": "document_start"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["inject.js"],
+      "matches": ["https://leetcode.com/*"]
+    }
+  ]
+}

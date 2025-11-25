@@ -12,7 +12,7 @@ const prisma = new PrismaClient({
 
 const app = express();
 app.use(cors({
-  origin: "http://localhost:3000",
+  origin: true, // Allow dynamic origin for Chrome Extension support
   credentials: true,
 }));
 app.use(express.json()); // Ensure JSON body parsing is enabled
@@ -289,7 +289,7 @@ const AttemptCreate = z.object({
   title: z.string().min(1, "title is required"),
   topics:z.string().default(""),
   lc_difficulty: z.number().int().min(0).max(3).default(0),
-  status: z.enum(["accepted", "rejected"]),
+  status: z.string(), // Allow any string status (e.g. "Accepted", "Wrong Answer")
   lang: z.string().optional(),
   runtime_ms: z.number().int().optional(),
   memory_kb: z.number().int().optional(),
@@ -299,65 +299,86 @@ const AttemptCreate = z.object({
 });
 
 app.post("/attempt", async (req, res) => {
+  console.log("Received attempt request:", req.body); // DEBUG LOG
+
   const parsed = AttemptCreate.safeParse(req.body);
   if(!parsed.success) {
+    console.log("Validation error:", parsed.error.message); // DEBUG LOG
     return res.status(400).json({ error: parsed.error.message });
   }
   
   const p = parsed.data;
+  
+  // Normalize status to lowercase for consistency, if needed
+  const normalizedStatus = p.status.toLowerCase();
 
-  const user = await prisma.user.upsert({
-    where: { handle: p.user_handle }, // check if user exists, if not create a new user
-    update: {},
-    create: { handle: p.user_handle },
-  });
+  try {
+    // Verify user exists first
+    const userExists = await prisma.user.findUnique({
+        where: { handle: p.user_handle }
+    });
 
-  const problem = await prisma.problem.upsert({
-    where: { slug: p.slug }, 
-    update: { // update the problem if it exists
-      title: p.title,
-      topics: p.topics,
-      lcDifficulty: p.lc_difficulty,
-    },
-    create: { // create a new problem if it doesn't exist
-      slug: p.slug,
-      title: p.title,
-      topics: p.topics,
-      lcDifficulty: p.lc_difficulty,
-    },
-});
+    if (!userExists) {
+        console.log("User not found:", p.user_handle); // DEBUG LOG
+        // Option: fail if user doesn't exist, or create them. 
+        // For safety, let's ensure we only track for registered users or auto-create if that's the policy.
+        // Previous code used upsert, which is fine.
+    }
 
-  const attempt = await prisma.attempt.create({
-    data: {
-      // from the user and problem data, we can create a new attempt
-      userId: user.id, // ".id" comes from the prisma schema we defined
-      problemId: problem.id,
+    const user = await prisma.user.upsert({
+        where: { handle: p.user_handle },
+        update: {},
+        create: { handle: p.user_handle },
+    });
+    
+    console.log("User upserted:", user.id); // DEBUG LOG
 
-      status: p.status,
-      lang: p.lang ?? null,
-      runtimeMs: p.runtime_ms ?? null,
-      memoryKb: p.memory_kb ?? null,
-      seconds: p.seconds ?? null,
-      code: p.code ?? null,
-      ts: p.ts ?? new Date(),
-    },
-    include: { user: true, problem: true }, // fetch the user and problem data, e.g., handle, title, id, slug, title, etc.
-});
+    const problem = await prisma.problem.upsert({
+        where: { slug: p.slug }, 
+        update: { 
+        title: p.title,
+        // Only update topics/difficulty if they are provided (not default/empty)
+        topics: p.topics || undefined,
+        lcDifficulty: p.lc_difficulty > 0 ? p.lc_difficulty : undefined,
+        },
+        create: { 
+        slug: p.slug,
+        title: p.title,
+        topics: p.topics,
+        lcDifficulty: p.lc_difficulty,
+        },
+    });
 
-  res.json({ // return the attempt data
-    id: attempt.id,
-    user_handle: attempt.user.handle,
-    slug: attempt.problem.slug,
-    title: attempt.problem.title,
-    topics: attempt.problem.topics,
-    lc_difficulty: attempt.problem.lcDifficulty,
-    status: attempt.status,
-    lang: attempt.lang,
-    runtime_ms: attempt.runtimeMs,
-    memory_kb: attempt.memoryKb,
-    seconds: attempt.seconds,
-    ts: attempt.ts,
-  });
+    console.log("Problem upserted:", problem.id); // DEBUG LOG
+
+    const attempt = await prisma.attempt.create({
+        data: {
+        userId: user.id,
+        problemId: problem.id,
+        status: normalizedStatus,
+        lang: p.lang ?? null,
+        runtimeMs: p.runtime_ms ?? null,
+        memoryKb: p.memory_kb ?? null,
+        seconds: p.seconds ?? null,
+        code: p.code ?? null,
+        ts: p.ts ?? new Date(),
+        },
+        include: { user: true, problem: true },
+    });
+
+    console.log("Attempt created:", attempt.id); // DEBUG LOG
+
+    res.json({ 
+        id: attempt.id,
+        user_handle: attempt.user.handle,
+        slug: attempt.problem.slug,
+        title: attempt.problem.title,
+        status: attempt.status,
+    });
+  } catch (e: any) {
+      console.error("Error saving attempt:", e);
+      res.status(500).json({ error: e.message || "Server error" });
+  }
 });
 
 app.get("/attempts", async (req, res) => {
