@@ -287,6 +287,7 @@ const AttemptCreate = z.object({
   user_handle: z.string().min(1, "user_handle is required"),
   slug: z.string().min(1, "slug is required"),
   title: z.string().min(1, "title is required"),
+  problem_number: z.number().int().nullable().optional(),
   topics:z.string().default(""),
   lc_difficulty: z.number().int().min(0).max(3).default(0),
   status: z.string(), // Allow any string status (e.g. "Accepted", "Wrong Answer")
@@ -337,6 +338,7 @@ app.post("/attempt", async (req, res) => {
         where: { slug: p.slug }, 
         update: { 
         title: p.title,
+        number: p.problem_number,
         // Only update topics/difficulty if they are provided (not default/empty)
         topics: p.topics || undefined,
         lcDifficulty: p.lc_difficulty > 0 ? p.lc_difficulty : undefined,
@@ -344,6 +346,7 @@ app.post("/attempt", async (req, res) => {
         create: { 
         slug: p.slug,
         title: p.title,
+        number: p.problem_number,
         topics: p.topics,
         lcDifficulty: p.lc_difficulty,
         },
@@ -409,6 +412,7 @@ app.get("/attempts", async (req, res) => {
       user_handle: a.user.handle,
       slug: a.problem.slug,
       title: a.problem.title,
+      problem_number: a.problem.number,
       topics: a.problem.topics,
       lc_difficulty: a.problem.lcDifficulty,
       status: a.status,

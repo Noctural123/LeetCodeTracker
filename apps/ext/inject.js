@@ -8,8 +8,8 @@
     
     // Store pending submissions: id -> { lang, code, slug }
     const pending = {};
-    // Cache for problem tags: slug -> { tags: [], frontendId: null }
-    const slugToData = {};
+    // Cache for problem tags: slug -> [tags]
+    const slugToTags = {};
   
     XHR.open = function(method, url) {
       this._method = method;
@@ -63,11 +63,8 @@
                     }
 
                     if (slug) {
-                        slugToData[slug] = {
-                            tags: response.data.question.topicTags.map(t => t.name),
-                            frontendId: response.data.question.questionFrontendId
-                        };
-                        console.log("LCT: Captured details for", slug, slugToData[slug]);
+                        slugToTags[slug] = response.data.question.topicTags.map(t => t.name);
+                        console.log("LCT: Captured tags for", slug, slugToTags[slug]);
                     }
                 }
             } catch (e) { console.error('LCT: Error parsing GraphQL', e); }
@@ -127,14 +124,12 @@
                             }
                         }
 
-                        const cached = slugToData[data.slug] || {};
                         const result = {
                             ...data,
                             status: response.status_msg === "Accepted" ? "accepted" : "rejected",
                             runtime_ms: runtime,
                             memory_kb: Math.round(memory),
-                            tags: cached.tags || [],
-                            frontend_id: cached.frontendId || null
+                            tags: slugToTags[data.slug] || [] // Attach captured tags
                         };
 
                         console.log("LCT: Sending attempt to content script", result);

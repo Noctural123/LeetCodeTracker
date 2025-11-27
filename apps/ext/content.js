@@ -16,44 +16,50 @@ window.addEventListener('message', (event) => {
         }
 
         // Scrape Details
-        // 1. Title & Frontend ID
-        let title = document.title.split('-')[0].trim();
-        let frontendId = payload.frontend_id || null;
+        // 1. Title & Number
+        let fullTitle = document.title.split('-')[0].trim();
+        let title = fullTitle;
+        let problemNumber = null;
 
-        // Remove "123. " prefix if present and capture it if frontendId is missing
-        const idMatch = title.match(/^(\d+)\.\s*/);
-        if (idMatch) {
-            if (!frontendId) {
-                frontendId = idMatch[1];
-            }
-            title = title.replace(/^\d+\.\s*/, '');
+        // Extract "123. " prefix if present (Fallback 1)
+        const match = fullTitle.match(/^(\d+)\.\s*(.*)/);
+        if (match) {
+            problemNumber = parseInt(match[1]);
+            title = match[2];
         }
 
         // 2. Difficulty & Topics
         let difficulty = 1; // Default Easy
         let topics = payload.tags || [];
 
-        // Try to scrape from __NEXT_DATA__ (most reliable for Single Page Apps)
-        if (topics.length === 0) {
-            try {
-                const nextDataScript = document.getElementById('__NEXT_DATA__');
+        // Try to scrape from __NEXT_DATA__ (Most Reliable source for ID, Title, Difficulty, Topics)
+        try {
+            const nextDataScript = document.getElementById('__NEXT_DATA__');
             if (nextDataScript) {
                 const data = JSON.parse(nextDataScript.textContent);
-                // Traverse the JSON to find question data
-                // Structure varies, but usually under queries -> 0 -> state -> data -> question
-                // We'll try to find an object that looks like a question
                 const queries = data?.props?.pageProps?.dehydratedState?.queries || [];
-                const questionQuery = queries.find(q => q?.state?.data?.question?.topicTags);
+                
+                // Find the query that has question data
+                const questionQuery = queries.find(q => q?.state?.data?.question?.questionFrontendId);
                 
                 if (questionQuery) {
                     const question = questionQuery.state.data.question;
                     
+                    // Get ID
+                    if (question.questionFrontendId) {
+                        problemNumber = parseInt(question.questionFrontendId);
+                    }
+                    // Get Title (cleaner than DOM)
+                    if (question.title) {
+                        title = question.title;
+                    }
+
                     // Get difficulty
                     if (question.difficulty === "Medium") difficulty = 2;
                     else if (question.difficulty === "Hard") difficulty = 3;
                     
-                    // Get topics
-                    if (Array.isArray(question.topicTags)) {
+                    // Get topics (only if not already present)
+                    if (topics.length === 0 && Array.isArray(question.topicTags)) {
                         topics = question.topicTags.map(t => t.name);
                     }
                 }
@@ -61,9 +67,8 @@ window.addEventListener('message', (event) => {
         } catch (e) {
             console.error("LCT: Failed to parse __NEXT_DATA__", e);
         }
-        }
 
-        // Fallback: Scrape from DOM if __NEXT_DATA__ failed
+        // Fallback: Scrape from DOM if topics are still missing
         if (topics.length === 0) {
             // Try to find topic pills (often have href="/tag/...")
             const topicLinks = document.querySelectorAll('a[href*="/tag/"]');
@@ -88,7 +93,7 @@ window.addEventListener('message', (event) => {
             user_handle: user_handle,
             slug: payload.slug,
             title: title,
-            frontend_id: frontendId,
+            problem_number: problemNumber,
             topics: topicsStr,
             lc_difficulty: difficulty,
             status: payload.status,

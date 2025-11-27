@@ -10,6 +10,7 @@ type AttemptRow = {
     user_handle: string;
     slug: string;
     title: string;
+    problem_number?: number | null;
     topics: string;
     lc_difficulty: number;
     status: string;
@@ -26,6 +27,7 @@ const AttemptRowSchema = z.object({
     user_handle: z.string(),
     slug: z.string(),
     title: z.string(),
+    problem_number: z.number().nullable().optional(),
     topics: z.string(),
     lc_difficulty: z.number(),
     status: z.string(),
@@ -203,6 +205,9 @@ export default function Home() {
                                 <thead className="bg-gray-50">
                                     <tr>
                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            #
+                                        </th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                             Problem
                                         </th>
                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -219,6 +224,9 @@ export default function Home() {
                                 <tbody className="bg-white divide-y divide-gray-200">
                                     {rows.map((row) => (
                                         <tr key={row.id} className="hover:bg-gray-50">
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                {row.problem_number ? row.problem_number : "-"}
+                                            </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <div className="text-sm font-medium text-gray-900">{row.title}</div>
                                             </td>
