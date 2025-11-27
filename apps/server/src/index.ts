@@ -283,21 +283,21 @@ app.post("/auth/reset-password", async (req, res) => {
 
 
 // Data validation for creating an attempt
-const AttemptCreate = z.object({
-  user_handle: z.string().min(1, "user_handle is required"),
-  slug: z.string().min(1, "slug is required"),
-  title: z.string().min(1, "title is required"),
-  problem_number: z.number().int().nullable().optional(),
-  topics:z.string().default(""),
-  lc_difficulty: z.number().int().min(0).max(3).default(0),
-  status: z.string(), // Allow any string status (e.g. "Accepted", "Wrong Answer")
-  lang: z.string().optional(),
-  runtime_ms: z.number().int().optional(),
-  memory_kb: z.number().int().optional(),
-  seconds: z.number().int().optional(),
-  code: z.string().optional(),
-  ts: z.string().datetime().optional(),
-});
+  const AttemptCreate = z.object({
+    user_handle: z.string().min(1, "user_handle is required"),
+    slug: z.string().min(1, "slug is required"),
+    title: z.string().min(1, "title is required"),
+    problem_number: z.number().int().nullable().optional(),
+    topics:z.string().default(""),
+    lc_difficulty: z.number().int().min(0).max(3).default(0),
+    status: z.string(), // Allow any string status (e.g. "Accepted", "Wrong Answer")
+    lang: z.string().optional(),
+    runtime_ms: z.number().int().nullable().optional(),
+    memory_kb: z.number().nullable().optional(),
+    seconds: z.number().nullable().optional(),
+    code: z.string().optional(),
+    ts: z.string().datetime().optional(),
+  });
 
 app.post("/attempt", async (req, res) => {
   console.log("Received attempt request:", req.body); // DEBUG LOG
@@ -338,6 +338,7 @@ app.post("/attempt", async (req, res) => {
         where: { slug: p.slug }, 
         update: { 
         title: p.title,
+        // @ts-ignore: Prisma Client needs regeneration
         number: p.problem_number,
         // Only update topics/difficulty if they are provided (not default/empty)
         topics: p.topics || undefined,
@@ -346,6 +347,7 @@ app.post("/attempt", async (req, res) => {
         create: { 
         slug: p.slug,
         title: p.title,
+        // @ts-ignore: Prisma Client needs regeneration
         number: p.problem_number,
         topics: p.topics,
         lcDifficulty: p.lc_difficulty,
@@ -412,6 +414,7 @@ app.get("/attempts", async (req, res) => {
       user_handle: a.user.handle,
       slug: a.problem.slug,
       title: a.problem.title,
+      // @ts-ignore: Prisma Client needs regeneration
       problem_number: a.problem.number,
       topics: a.problem.topics,
       lc_difficulty: a.problem.lcDifficulty,
@@ -423,6 +426,59 @@ app.get("/attempts", async (req, res) => {
       ts: a.ts,
     }))
   );
+});
+
+// Endpoint to get unique solved problems
+app.get("/solved-problems", async (req, res) => {
+  const user_handle = String(req.query.user_handle || "");
+  
+  if (!user_handle) {
+      return res.json([]);
+  }
+
+  try {
+    // Get all accepted attempts for the user
+    const attempts = await prisma.attempt.findMany({
+      where: {
+        user: { handle: user_handle },
+        status: "accepted"
+      },
+      include: {
+        problem: true
+      },
+      orderBy: {
+        ts: "desc"
+      }
+    });
+
+    // Deduplicate by problem slug, keeping the most recent one
+    const uniqueProblems = new Map();
+    
+    attempts.forEach(attempt => {
+      if (!uniqueProblems.has(attempt.problem.slug)) {
+        uniqueProblems.set(attempt.problem.slug, {
+          id: attempt.problem.id,
+          slug: attempt.problem.slug,
+          title: attempt.problem.title,
+          // @ts-ignore: Prisma Client needs regeneration
+          number: attempt.problem.number,
+          topics: attempt.problem.topics,
+          lc_difficulty: attempt.problem.lcDifficulty,
+          last_solved: attempt.ts,
+          attempts_count: 1 // Initialize count
+        });
+      } else {
+          // Increment count for existing problem
+          const existing = uniqueProblems.get(attempt.problem.slug);
+          existing.attempts_count += 1;
+      }
+    });
+
+    res.json(Array.from(uniqueProblems.values()));
+  } catch (error: any) {
+    console.error("Error fetching solved problems:", error);
+    res.status(500).json({ error: "Failed to fetch solved problems" });
+  }
 });
 
 app.delete("/attempt/:id", async (req, res) => {
