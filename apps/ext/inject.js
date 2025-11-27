@@ -8,6 +8,8 @@
     
     // Store pending submissions: id -> { lang, code, slug }
     const pending = {};
+    // Cache for problem tags: slug -> { tags: [], frontendId: null }
+    const slugToData = {};
   
     XHR.open = function(method, url) {
       this._method = method;
@@ -42,6 +44,34 @@
     // --- Common Handler ---
     function handleResponse(url, method, responseText, postData) {
         if (!url) return;
+
+        // Handle GraphQL for Tags (Problem Details)
+        if (url.includes('/graphql') && method.toUpperCase() === 'POST') {
+            try {
+                const response = JSON.parse(responseText);
+                // Look for topicTags in the response
+                if (response?.data?.question?.topicTags) {
+                    // Try to get slug from request body to associate tags
+                    let slug = null;
+                    if (postData) {
+                        try {
+                            const body = typeof postData === 'string' ? JSON.parse(postData) : postData;
+                            if (body?.variables?.titleSlug) {
+                                slug = body.variables.titleSlug;
+                            }
+                        } catch (e) { /* ignore JSON parse error */ }
+                    }
+
+                    if (slug) {
+                        slugToData[slug] = {
+                            tags: response.data.question.topicTags.map(t => t.name),
+                            frontendId: response.data.question.questionFrontendId
+                        };
+                        console.log("LCT: Captured details for", slug, slugToData[slug]);
+                    }
+                }
+            } catch (e) { console.error('LCT: Error parsing GraphQL', e); }
+        }
         
         // Handle SUBMIT
         // URL usually: https://leetcode.com/problems/<slug>/submit/
@@ -97,11 +127,14 @@
                             }
                         }
 
+                        const cached = slugToData[data.slug] || {};
                         const result = {
                             ...data,
                             status: response.status_msg === "Accepted" ? "accepted" : "rejected",
                             runtime_ms: runtime,
                             memory_kb: Math.round(memory),
+                            tags: cached.tags || [],
+                            frontend_id: cached.frontendId || null
                         };
 
                         console.log("LCT: Sending attempt to content script", result);

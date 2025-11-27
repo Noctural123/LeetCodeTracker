@@ -16,20 +16,27 @@ window.addEventListener('message', (event) => {
         }
 
         // Scrape Details
-        // 1. Title
+        // 1. Title & Frontend ID
         let title = document.title.split('-')[0].trim();
-        // Remove "123. " prefix if present
-        if (/^\d+\.\s*/.test(title)) {
+        let frontendId = payload.frontend_id || null;
+
+        // Remove "123. " prefix if present and capture it if frontendId is missing
+        const idMatch = title.match(/^(\d+)\.\s*/);
+        if (idMatch) {
+            if (!frontendId) {
+                frontendId = idMatch[1];
+            }
             title = title.replace(/^\d+\.\s*/, '');
         }
 
         // 2. Difficulty & Topics
         let difficulty = 1; // Default Easy
-        let topics = [];
+        let topics = payload.tags || [];
 
         // Try to scrape from __NEXT_DATA__ (most reliable for Single Page Apps)
-        try {
-            const nextDataScript = document.getElementById('__NEXT_DATA__');
+        if (topics.length === 0) {
+            try {
+                const nextDataScript = document.getElementById('__NEXT_DATA__');
             if (nextDataScript) {
                 const data = JSON.parse(nextDataScript.textContent);
                 // Traverse the JSON to find question data
@@ -54,6 +61,7 @@ window.addEventListener('message', (event) => {
         } catch (e) {
             console.error("LCT: Failed to parse __NEXT_DATA__", e);
         }
+        }
 
         // Fallback: Scrape from DOM if __NEXT_DATA__ failed
         if (topics.length === 0) {
@@ -74,12 +82,13 @@ window.addEventListener('message', (event) => {
             else if (headerText.includes("Medium")) difficulty = 2;
         }
 
-        const topicsStr = topics.length > 0 ? topics.slice(0, 5).join("; ") : "Algorithms";
+        const topicsStr = topics.length > 0 ? topics.slice(0, 3).join("; ") : "Algorithms";
 
         const attemptData = {
             user_handle: user_handle,
             slug: payload.slug,
             title: title,
+            frontend_id: frontendId,
             topics: topicsStr,
             lc_difficulty: difficulty,
             status: payload.status,

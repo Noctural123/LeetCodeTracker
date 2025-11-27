@@ -27,6 +27,7 @@ model Problem {
   id           Int       @id @default(autoincrement())
   slug         String    @unique
   title        String
+  frontendId   String?
   topics       String
   lcDifficulty Int       @default(0) // 1=Easy,2=Medium,3=Hard
   attempts     Attempt[]
