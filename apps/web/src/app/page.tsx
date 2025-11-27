@@ -154,6 +154,18 @@ export default function Home() {
         });
     };
 
+    const handleDelete = async (id: number) => {
+        if (!confirm("Are you sure you want to delete this attempt?")) return;
+
+        try {
+            await axios.delete(`${API}/attempt/${id}`);
+            setRows(rows.filter(row => row.id !== id));
+        } catch (e: any) {
+            console.error("Delete error:", e);
+            alert("Failed to delete attempt. Please try again.");
+        }
+    };
+
     return (
         <div className="min-h-screen bg-gray-50 py-8">
             <div className="container mx-auto px-4 max-w-7xl">
@@ -219,6 +231,9 @@ export default function Home() {
                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                             Date
                                         </th>
+                                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Actions
+                                        </th>
                                     </tr>
                                 </thead>
                                 <tbody className="bg-white divide-y divide-gray-200">
@@ -255,6 +270,17 @@ export default function Home() {
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                                 {formatDate(row.ts)}
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                                <button
+                                                    onClick={() => handleDelete(row.id)}
+                                                    className="text-red-600 hover:text-red-900 transition-colors"
+                                                    title="Delete attempt"
+                                                >
+                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                    </svg>
+                                                </button>
                                             </td>
                                         </tr>
                                     ))}
