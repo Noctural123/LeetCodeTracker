@@ -48,7 +48,7 @@ type SolvedProblem = {
     topics: string;
     lc_difficulty: number;
     last_solved: string;
-    attempts_count: number;
+    success_rate: number;
 }
 
 const SolvedProblemSchema = z.object({
@@ -59,7 +59,7 @@ const SolvedProblemSchema = z.object({
     topics: z.string(),
     lc_difficulty: z.number(),
     last_solved: z.string(),
-    attempts_count: z.number(),
+    success_rate: z.number(),
 });
 
 export default function Home() {
@@ -356,6 +356,12 @@ export default function Home() {
                                                 >
                                                     Last Solved {sortConfig?.key === 'last_solved' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
                                                 </th>
+                                                <th 
+                                                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                                                    onClick={() => handleSort('success_rate')}
+                                                >
+                                                    Success Rate {sortConfig?.key === 'success_rate' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                                                </th>
                                             </tr>
                                         </thead>
                                         <tbody className="bg-white divide-y divide-gray-200">
@@ -388,11 +394,14 @@ export default function Home() {
                                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                                         {formatDate(problem.last_solved)}
                                                     </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                        {(problem.success_rate * 100).toFixed(1)}%
+                                                    </td>
                                                 </tr>
                                             ))}
                                             {solvedProblems.length === 0 && (
                                                 <tr>
-                                                    <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
+                                                    <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
                                                         No solved problems found yet.
                                                     </td>
                                                 </tr>

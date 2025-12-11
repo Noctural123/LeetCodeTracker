@@ -437,11 +437,10 @@ app.get("/solved-problems", async (req, res) => {
   }
 
   try {
-    // Get all accepted attempts for the user
+    // Get all attempts for the user to calculate success rate
     const attempts = await prisma.attempt.findMany({
       where: {
         user: { handle: user_handle },
-        status: "accepted"
       },
       include: {
         problem: true
@@ -451,30 +450,51 @@ app.get("/solved-problems", async (req, res) => {
       }
     });
 
-    // Deduplicate by problem slug, keeping the most recent one
-    const uniqueProblems = new Map();
-    
+    // Aggregate stats per problem
+    const problemStats = new Map();
+
     attempts.forEach(attempt => {
-      if (!uniqueProblems.has(attempt.problem.slug)) {
-        uniqueProblems.set(attempt.problem.slug, {
-          id: attempt.problem.id,
-          slug: attempt.problem.slug,
-          title: attempt.problem.title,
-          // @ts-ignore: Prisma Client needs regeneration
-          number: attempt.problem.number,
-          topics: attempt.problem.topics,
-          lc_difficulty: attempt.problem.lcDifficulty,
-          last_solved: attempt.ts,
-          attempts_count: 1 // Initialize count
+      const slug = attempt.problem.slug;
+      if (!problemStats.has(slug)) {
+        problemStats.set(slug, {
+          problem: attempt.problem,
+          total: 0,
+          accepted: 0,
+          last_solved: null
         });
-      } else {
-          // Increment count for existing problem
-          const existing = uniqueProblems.get(attempt.problem.slug);
-          existing.attempts_count += 1;
+      }
+
+      const stats = problemStats.get(slug);
+      stats.total += 1;
+      
+      if (attempt.status.toLowerCase() === "accepted") {
+        stats.accepted += 1;
+        // Since sorted by ts desc, the first accepted attempt we see is the most recent
+        if (!stats.last_solved) {
+          stats.last_solved = attempt.ts;
+        }
       }
     });
 
-    res.json(Array.from(uniqueProblems.values()));
+    // Filter only solved problems and format response
+    const solvedProblems = [];
+    for (const stats of problemStats.values()) {
+      if (stats.accepted > 0) {
+        solvedProblems.push({
+          id: stats.problem.id,
+          slug: stats.problem.slug,
+          title: stats.problem.title,
+          // @ts-ignore: Prisma Client needs regeneration
+          number: stats.problem.number,
+          topics: stats.problem.topics,
+          lc_difficulty: stats.problem.lcDifficulty,
+          last_solved: stats.last_solved,
+          success_rate: stats.accepted / stats.total
+        });
+      }
+    }
+
+    res.json(solvedProblems);
   } catch (error: any) {
     console.error("Error fetching solved problems:", error);
     res.status(500).json({ error: "Failed to fetch solved problems" });
